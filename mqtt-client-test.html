@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT消息订阅系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #1a2980, #26d0ce);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(to right, #2c3e50, #3498db);
+            color: white;
+            padding: 25px 30px;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 20px;
+            gap: 20px;
+        }
+        
+        .connection-panel, .message-panel {
+            flex: 1;
+            min-width: 300px;
+            padding: 25px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+        
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+            display: flex;
+            align-items: center;
+        }
+        
+        h2 i {
+            margin-right: 10px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background-color: #e74c3c;
+        }
+        
+        .status-indicator.connected {
+            background-color: #2ecc71;
+        }
+        
+        .status-indicator.connecting {
+            background-color: #f39c12;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #34495e;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border 0.3s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            border-color: #3498db;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+        
+        button {
+            background: linear-gradient(to right, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+        
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        button.danger {
+            background: linear-gradient(to right, #e74c3c, #c0392b);
+        }
+        
+        button.danger:hover {
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .message-display {
+            height: 400px;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .message-display .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-left: 4px solid #3498db;
+            background-color: white;
+            border-radius: 0 4px 4px 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .message-display .timestamp {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 3px;
+        }
+        
+        .message-display .topic {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .message-display .content {
+            color: #34495e;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #3498db;
+        }
+        
+        .stat-label {
+            font-size: 13px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        
+        .clear-btn {
+            width: auto;
+            padding: 8px 15px;
+            font-size: 14px;
+            margin-top: 15px;
+            background: #95a5a6;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+            font-size: 14px;
+            border-top: 1px solid #eee;
+            background-color: #f8f9fa;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MQTT消息订阅系统</h1>
+            <p class="subtitle">实时订阅并显示来自EMQX Broker的MQTT消息</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="connection-panel">
+                <h2><span class="status-indicator" id="statusIndicator"></span> 连接状态</h2>
+                
+                <div class="form-group">
+                    <label for="brokerUrl">Broker地址</label>
+                    <input type="text" id="brokerUrl" value="wss://broker-cn.emqx.io:8084/mqtt">
+                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">注意：浏览器使用WebSocket连接，端口8084(SSL)或8083(非SSL)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="clientId">客户端ID</label>
+                    <input type="text" id="clientId" value="WebClient_" + Math.random().toString(16).substr(2, 8)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="topic">订阅主题</label>
+                    <input type="text" id="topic" value="/ZC2023/device/GW000001/+/up">
+                    <small style="color: #7f8c8d; display: block; margin-top: 5px;">"+"为通配符，匹配一级主题</small>
+                </div>
+                
+                <div class="button-group">
+                    <button id="connectBtn">连接MQTT</button>
+                    <button id="disconnectBtn" class="danger" disabled>断开连接</button>
+                </div>
+                
+                <div class="stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="messageCount">0</div>
+                        <div class="stat-label">消息数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="connectionStatus">已断开</div>
+                        <div class="stat-label">连接状态</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="reconnectCount">0</div>
+                        <div class="stat-label">重连次数</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="message-panel">
+                <h2>📨 接收到的消息</h2>
+                
+                <div class="form-group">
+                    <label>消息显示区</label>
+                    <div class="message-display" id="messageDisplay">
+                        <!-- 消息将在这里显示 -->
+                        <div class="message">
+                            <div class="timestamp">系统提示</div>
+                            <div class="content">等待连接MQTT Broker并订阅主题...</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button id="clearBtn" class="clear-btn">清空消息</button>
+            </div>
+        </div>
+        
+        <footer>
+            <p>使用MQTT.js和jQuery实现 | 连接到EMQX公共Broker | 支持断线自动重连</p>
+        </footer>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            // MQTT客户端变量
+            let mqttClient = null;
+            let isConnected = false;
+            let reconnectAttempts = 0;
+            let messageCount = 0;
+            let reconnectInterval = null;
+            
+            // DOM元素
+            const connectBtn = $('#connectBtn');
+            const disconnectBtn = $('#disconnectBtn');
+            const clearBtn = $('#clearBtn');
+            const statusIndicator = $('#statusIndicator');
+            const connectionStatus = $('#connectionStatus');
+            const messageCountEl = $('#messageCount');
+            const reconnectCount = $('#reconnectCount');
+            const messageDisplay = $('#messageDisplay');
+            
+            // 更新UI状态
+            function updateUIStatus(connected) {
+                isConnected = connected;
+                
+                if (connected) {
+                    statusIndicator.removeClass('connecting').addClass('connected');
+                    connectionStatus.text('已连接').css('color', '#2ecc71');
+                    connectBtn.prop('disabled', true);
+                    disconnectBtn.prop('disabled', false);
+                    connectBtn.text('已连接');
+                } else {
+                    statusIndicator.removeClass('connected connecting');
+                    connectionStatus.text('已断开').css('color', '#e74c3c');
+                    connectBtn.prop('disabled', false);
+                    disconnectBtn.prop('disabled', true);
+                    connectBtn.text('连接MQTT');
+                }
+            }
+            
+            // 显示消息
+            function displayMessage(topic, message) {
+                messageCount++;
+                messageCountEl.text(messageCount);
+                
+                const timestamp = new Date().toLocaleTimeString();
+                const messageEl = $(`
+                    <div class="message">
+                        <div class="timestamp">${timestamp}</div>
+                        <div class="topic">主题: ${topic}</div>
+                        <div class="content">${escapeHtml(message)}</div>
+                    </div>
+                `);
+                
+                messageDisplay.append(messageEl);
+                // 滚动到底部
+                messageDisplay.scrollTop(messageDisplay[0].scrollHeight);
+            }
+            
+            // HTML转义防止XSS
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+            
+            // 连接MQTT Broker
+            function connectToBroker() {
+                const brokerUrl = $('#brokerUrl').val();
+                const clientId = $('#clientId').val();
+                const topic = $('#topic').val();
+                
+                // 更新状态
+                updateUIStatus(false);
+                statusIndicator.addClass('connecting');
+                connectionStatus.text('连接中...').css('color', '#f39c12');
+                
+                // 显示连接提示
+                displayMessage('系统', `正在连接到 ${brokerUrl}...`);
+                
+                // MQTT连接选项
+                const options = {
+                    clientId: clientId,
+                    clean: true,
+                    reconnectPeriod: 0, // 禁用自动重连，我们将自己实现
+                    connectTimeout: 5000,
+                    keepalive: 60
+                };
+                
+                // 创建MQTT客户端
+                try {
+                    mqttClient = mqtt.connect(brokerUrl, options);
+                    
+                    // 连接成功
+                    mqttClient.on('connect', function() {
+                        console.log('MQTT连接成功');
+                        reconnectAttempts = 0;
+                        reconnectCount.text(reconnectAttempts);
+                        
+                        // 订阅主题
+                        mqttClient.subscribe(topic, function(err) {
+                            if (err) {
+                                displayMessage('系统', `订阅主题失败: ${err.message}`);
+                                console.error('订阅失败:', err);
+                            } else {
+                                displayMessage('系统', `成功连接到Broker并订阅主题: ${topic}`);
+                                updateUIStatus(true);
+                            }
+                        });
+                    });
+                    
+                    // 接收消息
+                    mqttClient.on('message', function(receivedTopic, message) {
+                        const msgString = message.toString();
+                        console.log(`收到消息: ${receivedTopic} - ${msgString}`);
+                        displayMessage(receivedTopic, msgString);
+                    });
+                    
+                    // 连接错误
+                    mqttClient.on('error', function(err) {
+                        console.error('MQTT连接错误:', err);
+                        displayMessage('系统', `连接错误: ${err.message}`);
+                        updateUIStatus(false);
+                        
+                        // 尝试重连
+                        startReconnect();
+                    });
+                    
+                    // 断开连接
+                    mqttClient.on('close', function() {
+                        console.log('MQTT连接关闭');
+                        displayMessage('系统', '连接已断开');
+                        updateUIStatus(false);
+                        
+                        // 如果不是手动断开，则尝试重连
+                        if (reconnectInterval === null) {
+                            startReconnect();
+                        }
+                    });
+                    
+                    // 重连事件
+                    mqttClient.on('reconnect', function() {
+                        console.log('正在尝试重新连接...');
+                        displayMessage('系统', '正在尝试重新连接...');
+                    });
+                    
+                } catch (error) {
+                    console.error('创建MQTT客户端失败:', error);
+                    displayMessage('系统', `创建MQTT客户端失败: ${error.message}`);
+                    updateUIStatus(false);
+                    startReconnect();
+                }
+            }
+            
+            // 启动重连机制
+            function startReconnect() {
+                if (reconnectInterval !== null) return;
+                
+                reconnectInterval = setInterval(function() {
+                    if (!isConnected && mqttClient !== null) {
+                        reconnectAttempts++;
+                        reconnectCount.text(reconnectAttempts);
+                        
+                        console.log(`尝试重新连接 (第${reconnectAttempts}次)`);
+                        displayMessage('系统', `尝试重新连接 (第${reconnectAttempts}次)...`);
+                        
+                        // 清除旧的客户端并重新连接
+                        if (mqttClient.connected) {
+                            mqttClient.end();
+                        }
+                        
+                        connectToBroker();
+                    } else {
+                        // 如果已连接，清除重连定时器
+                        clearReconnect();
+                    }
+                }, 5000); // 每5秒尝试重连
+            }
+            
+            // 清除重连定时器
+            function clearReconnect() {
+                if (reconnectInterval !== null) {
+                    clearInterval(reconnectInterval);
+                    reconnectInterval = null;
+                }
+            }
+            
+            // 断开连接
+            function disconnectBroker() {
+                clearReconnect();
+                
+                if (mqttClient !== null && mqttClient.connected) {
+                    mqttClient.end();
+                    displayMessage('系统', '已手动断开连接');
+                }
+                
+                updateUIStatus(false);
+            }
+            
+            // 清空消息
+            function clearMessages() {
+                messageDisplay.empty();
+                messageCount = 0;
+                messageCountEl.text(messageCount);
+                displayMessage('系统', '消息已清空');
+            }
+            
+            // 事件监听
+            connectBtn.click(function() {
+                connectToBroker();
+            });
+            
+            disconnectBtn.click(function() {
+                disconnectBroker();
+            });
+            
+            clearBtn.click(function() {
+                clearMessages();
+            });
+            
+            // 页面关闭前断开连接
+            $(window).on('beforeunload', function() {
+                if (mqttClient !== null && mqttClient.connected) {
+                    mqttClient.end();
+                }
+            });
+            
+            // 初始状态
+            updateUIStatus(false);
+            
+            // 自动连接（可选，取消注释以下行将自动连接）
+            // setTimeout(connectToBroker, 1000);
+        });
+    </script>
+</body>
+</html>
