@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart902 - 山村</title>
+    <!-- 引入jQuery -->
+    <!-- <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> -->
+	<script src="https://hanni92.github.io/jquery-3.7.1.js"></script>
+    <!-- 引入MQTT.js -->
+    <!-- <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script> -->
+	<script src="https://hanni92.github.io/mqtt.min.js"></script>
+    <!-- 引入Bootstrap用于响应式设计 -->
+    <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"> -->
+	<link href="https://hanni92.github.io/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* 样式保持不变，与之前相同 */
+        :root {
+            --primary-color: #3498db;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --light-on-color: #fff9c4;
+            --light-off-color: #f5f5f5;
+            --border-radius: 12px;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            padding-bottom: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 15px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), #2980b9);
+            color: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            margin-bottom: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+        }
+        
+        .connection-status {
+            display: inline-block;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            background-color: rgba(255,255,255,0.2);
+        }
+        
+        .connected {
+            background-color: rgba(46, 204, 113, 0.2);
+        }
+        
+        .disconnected {
+            background-color: rgba(231, 76, 60, 0.2);
+        }
+        
+        .connecting {
+            background-color: rgba(241, 196, 15, 0.2);
+        }
+        
+        .lights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .lights-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .light-card {
+            background-color: white;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            border: 1px solid #eaeaea;
+        }
+        
+        .light-card.on {
+            background-color: var(--light-on-color);
+            border-color: #ffd54f;
+        }
+        
+        .light-name {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+        }
+        
+        .light-name:before {
+            content: "💡";
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+        
+        .light-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 12px 5px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-on {
+            background-color: var(--success-color);
+            color: white;
+        }
+        
+        .btn-on:hover {
+            background-color: #27ae60;
+        }
+        
+        .btn-off {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        
+        .btn-off:hover {
+            background-color: #c0392b;
+        }
+        
+        .light-status {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            background-color: rgba(0,0,0,0.03);
+        }
+        
+        .light-online-status {
+            text-align: right;
+            font-size: 0.9rem;
+            padding: 5px;
+        }
+        
+        .online {
+            color: var(--success-color);
+            font-weight: 600;
+        }
+        
+        .offline {
+            color: var(--danger-color);
+            font-weight: 600;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        
+        .online .status-indicator {
+            background-color: var(--success-color);
+            animation: pulse 2s infinite;
+        }
+        
+        .offline .status-indicator {
+            background-color: var(--danger-color);
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+        
+        .heartbeat-info {
+            font-size: 0.85rem;
+            color: #95a5a6;
+            margin-top: 5px;
+            text-align: right;
+        }
+        
+        .last-heartbeat {
+            font-family: monospace;
+            background-color: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #7f8c8d;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .reconnect-btn {
+            margin-left: 10px;
+            padding: 4px 12px;
+            background-color: rgba(255,255,255,0.3);
+            border: 1px solid white;
+            color: white;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .reconnect-btn:hover {
+            background-color: rgba(255,255,255,0.4);
+        }
+        
+        .mqtt-info {
+            margin-top: 5px;
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 页面头部 -->
+        <div class="header">
+            <h1 id="roomName">山村</h1>
+            <p>Smart902 <a href="https://hanni92.github.io/app-release.apk">下载APP</a></p>
+            <div id="connectionStatus" class="connection-status connecting">
+                <span id="statusText">正在连接MQTT服务器...</span>
+                <button id="reconnectBtn" class="reconnect-btn" style="display:none;" onclick="manualReconnect()">重新连接</button>
+            </div>
+            <div id="mqttInfo" class="mqtt-info"></div>
+        </div>
+        
+        <!-- 灯光控制卡片容器 -->
+        <div id="lightsContainer" class="lights-grid">
+            <!-- 灯光卡片将通过JavaScript动态生成 -->
+            <div class="loading">
+                正在加载设备...
+            </div>
+        </div>
+        
+        <!-- 页面底部 -->
+        <div class="footer">
+            <p>Smart902 &copy; 2026 | 基于MQTT的实时控制</p>
+        </div>
+    </div>
+
+    <script>
+        // 初始数据
+        const roomName = "山村";
+        const dkNames = ["灯1", "灯2", "灯3"];
+        const dkUids = ["BCDDC2131A0E", "F4CFA2601F8B",  "FCF5C4900CC3"];
+        
+        // ============ 修改点1：使用WSS连接 ============
+        // 使用EMQX的WebSocket SSL连接（更稳定，浏览器兼容性好）
+        const mqttBroker = "wss://broker.emqx.io:8084/mqtt";
+        // 备选服务器（如果上面不可用）
+        // const mqttBroker = "wss://test.mosquitto.org:8081";
+        // const mqttBroker = "wss://mqtt.eclipseprojects.io:443/mqtt";
+        
+        const mqttTopic = "/ZC2023/device/GW000002/+/up";
+        let mqttClient = null;
+        let isConnected = false;
+        let reconnectTimer = null;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        const RECONNECT_INTERVAL = 5000; // 5秒
+        
+        // 全局消息ID，每下发一次命令加1
+        let mid = 1;
+        
+        // 设备状态存储
+        const devices = {};
+        
+        // 初始化设备状态
+        function initializeDevices() {
+            for (let i = 0; i < dkNames.length; i++) {
+                devices[dkUids[i]] = {
+                    name: dkNames[i],
+                    uid: dkUids[i],
+                    status: 'unknown', // 'on', 'off', 'unknown'
+                    online: false,
+                    lastHeartbeat: null,
+                    heartbeatTimer: null,
+                    lastHeartbeatTime: null
+                };
+            }
+        }
+        
+        // 连接MQTT服务器（使用WSS）
+        function connectMQTT() {
+            console.log("正在连接MQTT服务器:", mqttBroker);
+            
+            // 更新连接状态显示
+            updateConnectionStatus("正在连接MQTT服务器...", "connecting");
+            updateMqttInfo(`尝试连接: ${mqttBroker} (尝试 ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+            
+            // 如果已有连接，先断开
+            if (mqttClient && mqttClient.connected) {
+                mqttClient.end();
+            }
+            
+            // ============ 修改点2：优化连接选项 ============
+            const options = {
+                clientId: 'mqttjs_' + Math.random().toString(16).substr(2, 8),
+                username: 'emqx', // 公共服务器可能需要
+                password: 'public', // 公共服务器可能需要
+                clean: true,
+                reconnectPeriod: 0, // 禁用自动重连，使用我们自己的重连逻辑
+                connectTimeout: 10 * 1000, // 10秒连接超时
+                keepalive: 30, // 30秒心跳
+                protocolVersion: 4, // MQTT v3.1.1
+                rejectUnauthorized: false // 对于自签名证书可能需要
+            };
+            
+            // 尝试连接MQTT
+            try {
+                mqttClient = mqtt.connect(mqttBroker, options);
+                setupMQTTListeners();
+            } catch (error) {
+                console.error("创建MQTT客户端失败:", error);
+                handleConnectionError(error.message);
+            }
+        }
+        
+        // 设置MQTT事件监听器
+        function setupMQTTListeners() {
+            // 连接成功
+            mqttClient.on('connect', function () {
+                console.log("MQTT连接成功");
+                isConnected = true;
+                reconnectAttempts = 0;
+                updateConnectionStatus("已连接到服务器", "connected");
+                updateMqttInfo(``);
+                
+                // 订阅主题
+                mqttClient.subscribe(mqttTopic, { qos: 0 }, function (err) {
+                    if (!err) {
+                        console.log("成功订阅主题:", mqttTopic);
+                    } else {
+                        console.error("订阅主题失败:", err);
+                        updateMqttInfo(`订阅失败: ${err.message}`);
+                    }
+                });
+                
+                // 显示重新连接按钮
+                $('#reconnectBtn').hide();
+            });
+            
+            // 接收消息处理
+            mqttClient.on('message', function (topic, message) {
+                try {
+                    const data = JSON.parse(message.toString());
+                    console.log("收到消息:", topic, data);
+                    handleMQTTMessage(data);
+                } catch (error) {
+                    console.error("解析消息失败:", error);
+                }
+            });
+            
+            // 连接断开处理
+            mqttClient.on('close', function () {
+                console.log("服务器连接已断开");
+                isConnected = false;
+                updateConnectionStatus("服务器连接已断开", "disconnected");
+                updateMqttInfo("连接已断开，正在尝试重新连接...");
+                
+                // 显示重新连接按钮
+                $('#reconnectBtn').show();
+                
+                // 尝试重新连接（指数退避策略）
+                scheduleReconnect();
+            });
+            
+            // 连接错误处理
+            mqttClient.on('error', function (error) {
+                console.error("服务器连接错误:", error);
+                isConnected = false;
+                handleConnectionError(error.message);
+            });
+            
+            // 重连事件
+            mqttClient.on('reconnect', function () {
+                console.log("正在尝试重新连接...");
+                updateConnectionStatus("正在重新连接...", "connecting");
+            });
+            
+            // 离线事件
+            mqttClient.on('offline', function () {
+                console.log("客户端已离线");
+                isConnected = false;
+                updateConnectionStatus("客户端离线", "disconnected");
+            });
+            
+            // 结束事件
+            mqttClient.on('end', function () {
+                console.log("MQTT连接结束");
+                isConnected = false;
+            });
+        }
+        
+        // 处理连接错误
+        function handleConnectionError(errorMessage) {
+            updateConnectionStatus("连接失败: " + errorMessage, "disconnected");
+            updateMqttInfo(`连接错误: ${errorMessage}`);
+            
+            // 显示重新连接按钮
+            $('#reconnectBtn').show();
+            
+            // 如果不是主动断开，尝试重新连接
+            if (!mqttClient || !mqttClient.disconnecting) {
+                scheduleReconnect();
+            }
+        }
+        
+        // 调度重新连接（指数退避策略）
+        function scheduleReconnect() {
+            // 清除之前的重连定时器
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+            }
+            
+            // 检查是否超过最大重试次数
+            if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                updateConnectionStatus("连接失败，已达最大重试次数", "disconnected");
+                updateMqttInfo("无法连接到服务器，请检查网络或服务器状态");
+                return;
+            }
+            
+            // 计算下次重连延迟（指数退避）
+            const delay = Math.min(RECONNECT_INTERVAL * Math.pow(1.5, reconnectAttempts), 30000);
+            reconnectAttempts++;
+            
+            console.log(`将在 ${delay/1000} 秒后尝试第 ${reconnectAttempts} 次重连`);
+            
+            // 设置重连定时器
+            reconnectTimer = setTimeout(function() {
+                console.log(`执行第 ${reconnectAttempts} 次重连尝试`);
+                connectMQTT();
+            }, delay);
+            
+            updateMqttInfo(`将在 ${Math.round(delay/1000)} 秒后尝试第 ${reconnectAttempts} 次重连`);
+        }
+        
+        // 手动重新连接
+        function manualReconnect() {
+            console.log("手动重新连接");
+            reconnectAttempts = 0;
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+            connectMQTT();
+        }
+        
+        // 处理MQTT消息
+        function handleMQTTMessage(data) {
+            const uid = data.uid;
+            const op = data.op;
+            
+            // 检查是否为已知设备
+            if (!devices[uid]) {
+                console.warn("收到未知设备消息:", uid);
+                return;
+            }
+            
+            // 更新设备最后心跳时间
+            const now = new Date();
+            devices[uid].lastHeartbeat = now;
+            devices[uid].lastHeartbeatTime = now.getTime();
+            
+            // 清除之前的心跳超时定时器
+            if (devices[uid].heartbeatTimer) {
+                clearTimeout(devices[uid].heartbeatTimer);
+            }
+            
+            // 设置新的心跳超时定时器（10秒）
+            devices[uid].heartbeatTimer = setTimeout(function() {
+                updateDeviceOnlineStatus(uid, false);
+            }, 10000);
+            
+            // 更新设备在线状态
+            updateDeviceOnlineStatus(uid, true);
+            
+            // 处理操作类型
+            if (op === 3) {
+                // 心跳消息，更新设备状态
+                const p2 = data.data?.p2;
+                if (p2 !== undefined) {
+                    const status = p2 === 1 ? 'on' : 'off';
+                    updateDeviceStatus(uid, status);
+                }
+            } else if (op === 5) {
+                // 控制响应消息
+                console.log("收到控制响应:", data);
+            }
+        }
+        
+        // 更新设备状态
+        function updateDeviceStatus(uid, status) {
+            if (devices[uid]) {
+                devices[uid].status = status;
+                updateDeviceCard(uid);
+            }
+        }
+        
+        // 更新设备在线状态
+        function updateDeviceOnlineStatus(uid, isOnline) {
+            if (devices[uid]) {
+                devices[uid].online = isOnline;
+                
+                // 如果设备离线，状态设为unknown
+                if (!isOnline) {
+                    devices[uid].status = 'unknown';
+                }
+                
+                updateDeviceCard(uid);
+            }
+        }
+        
+        // 发送控制命令
+        function sendControlCommand(uid, turnOn) {
+            if (!isConnected) {
+                alert("MQTT连接未就绪，请检查连接状态");
+                return;
+            }
+            
+            const command = {
+                mid: mid++,
+                op: 5,
+                uid: uid,
+                data: {
+                    p0: turnOn ? 1 : 0,
+                    p2: turnOn ? 1 : 0,
+                    p3: turnOn ? 1 : 0
+                }
+            };
+            
+            console.log("发送控制命令:", command);
+            
+            // 发布控制命令到对应主题
+            const controlTopic = `/ZC2023/device/GW000002/${uid}/down`;
+            mqttClient.publish(controlTopic, JSON.stringify(command), { qos: 0 }, function(err) {
+                if (err) {
+                    console.error("发送控制命令失败:", err);
+                    alert("发送控制命令失败，请重试");
+                } else {
+                    console.log("控制命令已发送");
+                    // 暂时更新本地状态，等待设备确认
+                    devices[uid].status = turnOn ? 'on' : 'off';
+                    updateDeviceCard(uid);
+                }
+            });
+        }
+        
+        // 更新连接状态显示
+        function updateConnectionStatus(text, statusClass) {
+            const statusText = $('#statusText');
+            statusText.text(text);
+            
+            const statusElement = $('#connectionStatus');
+            statusElement.removeClass('connected disconnected connecting');
+            statusElement.addClass(statusClass);
+        }
+        
+        // 更新MQTT信息显示
+        function updateMqttInfo(text) {
+            $('#mqttInfo').text(text);
+        }
+        
+        // 创建设备卡片
+        function createDeviceCards() {
+            const container = $('#lightsContainer');
+            container.empty();
+            
+            for (let i = 0; i < dkNames.length; i++) {
+                const uid = dkUids[i];
+                const device = devices[uid];
+                
+                const cardClass = device.status === 'on' ? 'light-card on' : 'light-card';
+                const statusText = device.status === 'on' ? '开灯' : 
+                                 device.status === 'off' ? '关灯' : '状态未知';
+                const onlineStatus = device.online ? '在线' : '不在线';
+                const onlineClass = device.online ? 'online' : 'offline';
+                
+                const cardHtml = `
+                    <div class="${cardClass}" id="card-${uid}">
+                        <div class="light-name">${device.name}</div>
+                        <div class="light-controls">
+                            <button class="btn btn-on" onclick="controlLight('${uid}', true)" ${!device.online ? 'disabled' : ''}>
+                                开灯
+                            </button>
+                            <button class="btn btn-off" onclick="controlLight('${uid}', false)" ${!device.online ? 'disabled' : ''}>
+                                关灯
+                            </button>
+                        </div>
+                        <div class="light-status">当前状态：${statusText}</div>
+                        <div class="light-online-status ${onlineClass}">
+                            <span class="status-indicator"></span>${onlineStatus}
+                        </div>
+                        ${device.lastHeartbeat ? `
+                            <div class="heartbeat-info">
+                                最后心跳: <span class="last-heartbeat">${formatTime(device.lastHeartbeat)}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                container.append(cardHtml);
+            }
+        }
+        
+        // 更新设备卡片
+        function updateDeviceCard(uid) {
+            const device = devices[uid];
+            if (!device) return;
+            
+            const cardElement = $(`#card-${uid}`);
+            if (cardElement.length === 0) return;
+            
+            // 更新卡片样式
+            if (device.status === 'on') {
+                cardElement.addClass('on');
+            } else {
+                cardElement.removeClass('on');
+            }
+            
+            // 更新状态文本
+            const statusText = device.status === 'on' ? '开灯' : 
+                             device.status === 'off' ? '关灯' : '状态未知';
+            cardElement.find('.light-status').text(`当前状态：${statusText}`);
+            
+            // 更新在线状态
+            const onlineStatus = device.online ? '在线' : '不在线';
+            const onlineClass = device.online ? 'online' : 'offline';
+            const onlineElement = cardElement.find('.light-online-status');
+            onlineElement.html(`<span class="status-indicator"></span>${onlineStatus}`)
+                        .removeClass('online offline').addClass(onlineClass);
+            
+            // 更新按钮状态
+            cardElement.find('.btn-on, .btn-off').prop('disabled', !device.online);
+            
+            // 更新最后心跳时间
+            if (device.lastHeartbeat) {
+                let heartbeatElement = cardElement.find('.heartbeat-info');
+                if (heartbeatElement.length === 0) {
+                    cardElement.append(`
+                        <div class="heartbeat-info">
+                            最后心跳: <span class="last-heartbeat">${formatTime(device.lastHeartbeat)}</span>
+                        </div>
+                    `);
+                } else {
+                    heartbeatElement.find('.last-heartbeat').text(formatTime(device.lastHeartbeat));
+                }
+            }
+        }
+        
+        // 控制灯光
+        function controlLight(uid, turnOn) {
+            sendControlCommand(uid, turnOn);
+        }
+        
+        // 格式化时间
+        function formatTime(date) {
+            if (!date) return '从未';
+            
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000); // 秒数差
+            
+            if (diff < 60) {
+                return `${diff}秒前`;
+            } else if (diff < 3600) {
+                return `${Math.floor(diff / 60)}分钟前`;
+            } else {
+                return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            }
+        }
+        
+        // 页面加载完成后初始化
+        $(document).ready(function() {
+            // 初始化设备数据
+            initializeDevices();
+            
+            // 设置房间名称
+            $('#roomName').text(roomName);
+            
+            // 更新服务器信息显示
+            $('#serverInfo').text(`连接服务器: ${mqttBroker} | 主题: ${mqttTopic}`);
+            
+            // 创建设备卡片
+            createDeviceCards();
+            
+            // 连接MQTT服务器
+            connectMQTT();
+            
+            // 模拟设备心跳（用于演示）
+			/*
+            setTimeout(function() {
+                // 模拟部分设备心跳
+                simulateHeartbeat("84F3EB35E156", 1); // 主卧灯开
+                simulateHeartbeat("84F3EB35E157", 0); // 客厅灯关
+                simulateHeartbeat("84F3EB35E158", 1); // 次卧灯开
+            }, 2000);*/
+            
+            // 定期检查设备在线状态
+            setInterval(function() {
+                const now = new Date().getTime();
+                for (const uid in devices) {
+                    const device = devices[uid];
+                    if (device.lastHeartbeatTime) {
+                        const diff = now - device.lastHeartbeatTime;
+                        if (diff > 10000 && device.online) {
+                            updateDeviceOnlineStatus(uid, false);
+                        }
+                    }
+                }
+            }, 3000);
+        });
+        
+        // 模拟设备心跳（仅用于演示，实际环境中设备会自动发送）
+		/*
+        function simulateHeartbeat(uid, p2Value) {
+            if (!devices[uid]) return;
+            
+            const heartbeat = {
+                op: 3,
+                uid: uid,
+                data: {
+                    p0: 0,
+                    p2: p2Value,
+                    p3: 0
+                }
+            };
+            
+            // 模拟MQTT消息到达
+            setTimeout(function() {
+                handleMQTTMessage(heartbeat);
+                
+                // 定期模拟心跳
+                if (devices[uid] && devices[uid].online) {
+                    setTimeout(function() {
+                        simulateHeartbeat(uid, p2Value);
+                    }, 8000); // 8秒后再次模拟心跳
+                }
+            }, 100);
+        }*/
+        
+        // 页面卸载时清理
+        $(window).on('beforeunload', function() {
+            if (mqttClient) {
+                mqttClient.end();
+            }
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+            }
+        });
+    </script>
+</body>
+
+</html>
